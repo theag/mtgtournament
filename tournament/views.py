@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.urls import reverse
 from django.http import HttpResponseRedirect
-from .models import Tournament, Round, Table
+from .models import Tournament, Round, Table, Player
 import os
 
 
@@ -19,7 +19,7 @@ def index(request):
 
 def detail(request, tournament_id):
     t = Tournament.objects.get(pk=tournament_id)
-    r = Round.objects.get(number=Round.objects.filter(tournament=t).count())
+    r = Round.objects.get(number=Round.objects.filter(tournament=t).count(),tournament=t)
     if "table_edit" in request.POST:
         if int(request.POST["table_edit"]) >= 0:
             table = Table.objects.get(pk=request.POST["table_edit"])
@@ -39,36 +39,59 @@ def detail(request, tournament_id):
     context = {"tour_name":t.name, "tour_id":t.id, "round":r, "pairings":r.table_set.order_by("number")}
     if r.completed:
         context["stand_name"] = "as of the current round"
-        context["standings"] = r.player_list.order_by("-match_points","-opponent_match_win_percentage","-game_win_percentage","-opponent_game_win_percentage")
+        context["standings"] = r.player_list.order_by("dropped","-match_points","-opponent_match_win_percentage","-game_win_percentage","-opponent_game_win_percentage")
     elif r.number > 1:
         context["stand_name"] = "as of the previous round"
-        context["standings"] = Round.objects.get(number=r.number-1).player_list.order_by("-match_points","-opponent_match_win_percentage","-game_win_percentage","-opponent_game_win_percentage")
+        context["standings"] = Round.objects.get(number=r.number-1).player_list.order_by("dropped","-match_points","-opponent_match_win_percentage","-game_win_percentage","-opponent_game_win_percentage")
     return render(request, 'tournament/detail.html', context)
     
 def edit_round(request, round_id):
     r = Round.objects.get(pk=round_id)
     if "choices" in request.POST:
         c = request.POST["choices"].split()
-        t1 = Table.objects.get(pk=c[0][:-1])
-        t2 = Table.objects.get(pk=c[1][:-1])
-        if c[0][-1] == "a":
-            p1 = t1.player_a
+        if c[0] == "BYE":
+            t2 = Table.objects.get(pk=c[1][:-1])
+            p1 = r.bye
             if c[1][-1] == "a":
-                t1.player_a = t2.player_a
+                r.bye = t2.player_a
                 t2.player_a = p1
             else:
-                t1.player_a = t2.player_b
+                r.bye = t2.player_b
                 t2.player_b = p1
+            r.save()
+            t2.save()
+        elif c[1] == "BYE":
+            t1 = Table.objects.get(pk=c[0][:-1])
+            p1 = r.bye
+            if c[0][-1] == "a":
+                r.bye = t1.player_a
+                t1.player_a = p1
+            else:
+                r.bye = t1.player_b
+                t1.player_b = p1
+            r.save()
+            t1.save()
         else:
-            p1 = t1.player_b
-            if c[1][-1] == "a":
-                t1.player_b = t2.player_a
-                t2.player_a = p1
+            t1 = Table.objects.get(pk=c[0][:-1])
+            t2 = Table.objects.get(pk=c[1][:-1])
+            if c[0][-1] == "a":
+                p1 = t1.player_a
+                if c[1][-1] == "a":
+                    t1.player_a = t2.player_a
+                    t2.player_a = p1
+                else:
+                    t1.player_a = t2.player_b
+                    t2.player_b = p1
             else:
-                t1.player_b = t2.player_b
-                t2.player_b = p1
-        t1.save()
-        t2.save()
+                p1 = t1.player_b
+                if c[1][-1] == "a":
+                    t1.player_b = t2.player_a
+                    t2.player_a = p1
+                else:
+                    t1.player_b = t2.player_b
+                    t2.player_b = p1
+            t1.save()
+            t2.save()
         r.all_good_check()
         
     context = {"round":r, "pairings":r.table_set.order_by("number")}
@@ -78,3 +101,9 @@ def undo_round(request, round_id):
     r = Round.objects.get(pk=round_id)
     r.uncomplete_round()
     return HttpResponseRedirect(reverse("tournament:detail", args=(r.tournament.id,)))
+    
+def drop_player(request, player_id):
+    p = Player.objects.get(pk=player_id)
+    p.dropped = not p.dropped
+    p.save()
+    return HttpResponseRedirect(reverse("tournament:detail", args=(p.tournament.id,)))

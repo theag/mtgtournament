@@ -18,8 +18,13 @@ class Player(models.Model):
     opponent_game_win_percentage = models.FloatField(default=100/3)
     game_win_percentage = models.FloatField(default=100/3)
     sort_key = models.CharField(max_length=200)
-    # add dropping
-    # add win/draws/losses
+    match_wins = models.SmallIntegerField(default=0)
+    match_draws = models.SmallIntegerField(default=0)
+    match_losses = models.SmallIntegerField(default=0)
+    dropped = models.BooleanField(default=False)
+
+    def result_display(self):
+        return f"{self.match_wins}-{self.match_draws}-{self.match_losses}"
 
     def match_win_percentage(self):
         if self.opponents.count() == 0:
@@ -49,8 +54,12 @@ class Player(models.Model):
         self.opponents.add(other);
         if wins > games - wins - draws:
             self.match_points += 3;
+            self.match_wins += 1;
         elif wins == games - wins - draws:
             self.match_points += 1;
+            self.match_draws += 1;
+        else:
+            self.match_losses += 1;
         self.game_points += 3*wins + draws
         self.games_played += games
         self.game_win_percentage = max(100/3, self.game_points/(self.games_played*3.0)*100)
@@ -66,6 +75,14 @@ class Table(models.Model):
     player_a_wins = models.SmallIntegerField(default=0)
     player_b_wins = models.SmallIntegerField(default=0)
     draws = models.SmallIntegerField(default=0)
+    
+    def winner(self):
+        if self.reported and self.player_a_wins > self.player_b_wins:
+            return "a"
+        elif self.reported and self.player_b_wins > self.player_a_wins:
+            return "b"
+        else:
+            return ""
 
 class Round(models.Model):
     number = models.SmallIntegerField()
@@ -73,7 +90,7 @@ class Round(models.Model):
     player_list = models.ManyToManyField("Player")
     all_good = models.BooleanField(default=True)
     completed = models.BooleanField(default=False)
-    bye = models.SmallIntegerField(default=-1)
+    bye = models.ForeignKey("Player", on_delete=models.CASCADE, related_name="+", null=True)
 
     def initialize(self, player_list):
         key_strings = ["a"*x for x in range(len(player_list))]
@@ -91,7 +108,7 @@ class Round(models.Model):
             t.save()
             table_index += 1
         if len(sorted_players)%2 == 1:
-            self.bye = pairing_sort[-1].pk
+            self.bye = sorted_players.last()
         self.save()
 
     def all_good_check(self):
@@ -112,11 +129,11 @@ class Round(models.Model):
 
     def update_player_standings(self):
         #record_result(self, other, wins, draws, games):
-        if self.bye >= 0:
-            pbye = player_list.get(pk=self.bye)
-            pbye.match_points += 3
-            pbye.bye_count += 1
-            pbye.save()
+        if self.bye is not None:
+            self.bye.match_points += 3
+            self.bye.bye_count += 1
+            self.bye.match_wins += 1
+            self.bye.save()
         for table in self.table_set.all():
             table.player_a.record_result(table.player_b, table.player_a_wins, table.draws, table.player_a_wins+table.player_b_wins+table.draws)
             table.player_b.record_result(table.player_a, table.player_b_wins, table.draws, table.player_a_wins+table.player_b_wins+table.draws)
@@ -125,17 +142,20 @@ class Round(models.Model):
             p.update_opponent_tiebreakers()
         
     def uncomplete_round(self):
-        if self.bye >= 0:
-            pbye = player_list.get(pk=self.bye)
-            pbye.match_points -= 3
-            pbye.bye_count -= 1
-            pbye.save()
+        if self.bye is not None:
+            self.bye.match_points -= 3
+            self.bye.bye_count -= 1
+            self.bye.save()
         for table in self.table_set.all():
             table.player_a.opponents.remove(table.player_b)
             if table.player_a_wins > table.player_b_wins:
                 table.player_a.match_points -= 3
+                table.player_a.match_wins -= 1
             elif table.player_a_wins == table.player_b_wins:
                 table.player_a.match_points -= 1
+                table.player_a.match_draws -= 1
+            else:
+                table.player_a.match_losses -= 1
             table.player_a.game_points -= 3*table.player_a_wins + table.draws
             table.player_a.games_played -= table.player_a_wins + table.player_b_wins + table.draws
             if table.player_a.games_played > 0:
@@ -147,8 +167,12 @@ class Round(models.Model):
             table.player_b.opponents.remove(table.player_a)
             if table.player_b_wins > table.player_a_wins:
                 table.player_b.match_points -= 3
+                table.player_b.match_wins -= 1
             elif table.player_a_wins == table.player_b_wins:
                 table.player_b.match_points -= 1
+                table.player_b.match_draws -= 1
+            else:
+                table.player_b.match_losses -= 1
             table.player_b.game_points -= 3*table.player_b_wins + table.draws
             table.player_b.games_played -= table.player_a_wins + table.player_b_wins + table.draws
             if table.player_b.games_played > 0:
@@ -174,6 +198,6 @@ class Tournament(models.Model):
     def start_next_round(self):
         r = Round(number=Round.objects.filter(tournament=self).count()+1,tournament=self)
         r.save()
-        r.initialize(self.player_set.all())
+        r.initialize(self.player_set.filter(dropped=False))
         r.save()
         return r

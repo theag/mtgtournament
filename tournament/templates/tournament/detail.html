@@ -43,6 +43,7 @@
 </head>
 <body>
 	<h1>{{ tour_name }}</h1>
+	<div><a href="{% url 'tournament:index' %}">Home</a></div>
 	<form method="post" action="{% url 'tournament:detail' tour_id %}"  id="frmMain">
 		{% csrf_token %}
 		<input type="hidden" name="table_edit" id="hdnTable" value="-1" />
@@ -60,7 +61,7 @@
 			{% for table in pairings %}
 			<tr {% if not table.good_match %}style="background-color:red"{% endif %}>
 				<td>{{ table.number }}</td>
-				<td><div>{{ table.player_a.name }}</div><div>{{ table.player_a.match_points }}</div></td>
+				<td><div>{{ table.player_a.name }}</div><div>{{ table.player_a.result_display }}</div></td>
 				<td>
 					<span class="static{{ table.id }}">{{ table.player_a_wins }}</span>
 					<input style="display:none" class="edit{{ table.id }}" type="number" name="{{ table.id }}a" value="{{ table.player_a_wins }}" />
@@ -73,7 +74,7 @@
 					<span class="static{{ table.id }}">{{ table.player_b_wins }}</span>
 					<input style="display:none" class="edit{{ table.id }}" type="number" name="{{ table.id }}b" value="{{ table.player_b_wins }}" />
 				</td>
-				<td><div>{{ table.player_b.name }}</div><div>{{ table.player_b.match_points }}</div></td>
+				<td><div>{{ table.player_b.name }}</div><div>{{ table.player_b.result_display }}</div></td>
 				{% if not round.completed %}
 				<td>
 					<input type="button" onclick="doEdit({{ table.id }})" value="Edit" class="static{{ table.id }}" />
@@ -83,6 +84,12 @@
 				{% endif %}
 			</tr>
 			{% endfor %}
+			{% if round.bye is not None %}
+			<tr>
+				<td>BYE</td>
+				<td><div>{{ round.bye.name }}</div><div>{{ round.bye.result_display }}</div></td>
+			</tr>
+			{% endif %}
 		</table>
 		{% if round.all_done_check %}<div style="margin-top:10px"><input type="submit" value="{% if round.completed %}Next Round{% else %}Complete Round{% endif %}" /></div>{% endif %}
 	</form>
@@ -100,11 +107,17 @@
 		{% for player in standings %}
 		<tr>
 			<td>{{ forloop.counter }}</td>
-			<td>{{ player.name }}</td>
+			<td><span {% if player.dropped %}style="text-decoration:line-through"{% endif %}>{{ player.name }}</span></td>
 			<td>{{ player.match_points }}</td>
 			<td>{{ player.opponent_match_win_percentage|floatformat:2 }}</td>
 			<td>{{ player.game_win_percentage|floatformat:2 }}</td>
 			<td>{{ player.opponent_game_win_percentage|floatformat:2 }}</td>
+			<td>
+				<form method="post" action="{% url 'tournament:drop_player' player.id %}">
+					{% csrf_token %}
+					<input type="submit" value="{% if player.dropped %}Undrop{% else %}Drop{% endif %}" />
+				</form>
+			</td>
 		</tr>
 		{% endfor %}
 	</table>
