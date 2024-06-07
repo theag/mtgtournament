@@ -18,6 +18,11 @@ from django.urls import path, include
 
 from . import views
 
+app_name = "tournament"
+
 urlpatterns = [
     path('', views.index, name='index'),
+    path('<int:tournament_id>', views.detail, name='detail'),
+    path('edit/<int:round_id>', views.edit_round, name='edit_round'),
+    path('undo/<int:round_id>', views.undo_round, name='undo_round'),
 ]

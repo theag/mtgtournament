@@ -1,0 +1,118 @@
+{% load static %}
+<head>
+    <title>MTG Tournament</title>
+	<link href="{% static 'styles.css' %}" type="text/css" rel="stylesheet"></link>
+	<script>
+		function doEdit(table_number) {
+			//hide the table currently being edited
+			currentEdit = document.getElementById("hdnTable").value;
+			if(currentEdit >= 0) {
+				lst = document.getElementsByClassName("edit"+currentEdit);
+				for(let i = 0; i < lst.length; i++) {
+					lst[i].style.display = "none";
+				}
+				lst = document.getElementsByClassName("static"+currentEdit);
+				for(let i = 0; i < lst.length; i++) {
+					lst[i].style.display = "";
+				}
+			}
+			//reveal the new things
+			lst = document.getElementsByClassName("edit"+table_number);
+			for(let i = 0; i < lst.length; i++) {
+				lst[i].style.display = "";
+			}
+			lst = document.getElementsByClassName("static"+table_number);
+			for(let i = 0; i < lst.length; i++) {
+				lst[i].style.display = "none";
+			}
+			document.getElementById("hdnTable").value = table_number;
+		}
+		
+		function cancelEdit(table_number) {
+			lst = document.getElementsByClassName("edit"+table_number);
+			for(let i = 0; i < lst.length; i++) {
+				lst[i].style.display = "none";
+			}
+			lst = document.getElementsByClassName("static"+table_number);
+			for(let i = 0; i < lst.length; i++) {
+				lst[i].style.display = "";
+			}
+			document.getElementById("hdnTable").value = -1;
+		}
+	</script>
+</head>
+<body>
+	<h1>{{ tour_name }}</h1>
+	<form method="post" action="{% url 'tournament:detail' tour_id %}"  id="frmMain">
+		{% csrf_token %}
+		<input type="hidden" name="table_edit" id="hdnTable" value="-1" />
+		<h2>Round {{ round.number }}</h2>
+		<h3>Pairings</h3>
+		{% if not round.all_good_check %}
+		<h2 style="background-color:red">Bad Pairings Exist <a href="{% url 'tournament:edit_round' round.id %}">Edit Pairings</a></h2>
+		{% endif %}
+		<table class='pairings'>
+			<tr>
+				<th>#</th>
+				<th></th>
+				<th colspan=3>Results</th>
+			</tr>
+			{% for table in pairings %}
+			<tr {% if not table.good_match %}style="background-color:red"{% endif %}>
+				<td>{{ table.number }}</td>
+				<td><div>{{ table.player_a.name }}</div><div>{{ table.player_a.match_points }}</div></td>
+				<td>
+					<span class="static{{ table.id }}">{{ table.player_a_wins }}</span>
+					<input style="display:none" class="edit{{ table.id }}" type="number" name="{{ table.id }}a" value="{{ table.player_a_wins }}" />
+				</td>
+				<td>
+					<span class="static{{ table.id }}">{{ table.draws }}</span>
+					<input style="display:none" class="edit{{ table.id }}" type="number" name="{{ table.id }}d" value="{{ table.draws }}" />
+				</td>
+				<td>
+					<span class="static{{ table.id }}">{{ table.player_b_wins }}</span>
+					<input style="display:none" class="edit{{ table.id }}" type="number" name="{{ table.id }}b" value="{{ table.player_b_wins }}" />
+				</td>
+				<td><div>{{ table.player_b.name }}</div><div>{{ table.player_b.match_points }}</div></td>
+				{% if not round.completed %}
+				<td>
+					<input type="button" onclick="doEdit({{ table.id }})" value="Edit" class="static{{ table.id }}" />
+					<input type="button" value="Cancel" onclick="cancelEdit({{ table.id }})" class="edit{{ table.id }}" style="display:none" />
+					<input type="submit" value="Submit" class="edit{{ table.id }}" style="display:none" />
+				</td>
+				{% endif %}
+			</tr>
+			{% endfor %}
+		</table>
+		{% if round.all_done_check %}<div style="margin-top:10px"><input type="submit" value="{% if round.completed %}Next Round{% else %}Complete Round{% endif %}" /></div>{% endif %}
+	</form>
+	{% if stand_name %}
+	<h3> Standings {{ stand_name }}</h3>
+	<table>
+		<tr>
+			<th></th>
+			<th>Player</th>
+			<th>MP</th>
+			<th>OMW%</th>
+			<th>GW%</th>
+			<th>OGW%</th>
+		</tr>
+		{% for player in standings %}
+		<tr>
+			<td>{{ forloop.counter }}</td>
+			<td>{{ player.name }}</td>
+			<td>{{ player.match_points }}</td>
+			<td>{{ player.opponent_match_win_percentage|floatformat:2 }}</td>
+			<td>{{ player.game_win_percentage|floatformat:2 }}</td>
+			<td>{{ player.opponent_game_win_percentage|floatformat:2 }}</td>
+		</tr>
+		{% endfor %}
+	</table>
+	{% endif %}
+	{% if round.completed %}
+	<form method="post" action="{% url 'tournament:undo_round' round.id %}">
+		{% csrf_token %}
+		<input type="submit" value="Undo Complete" />
+	</form>
+	{% endif %}
+</body>
