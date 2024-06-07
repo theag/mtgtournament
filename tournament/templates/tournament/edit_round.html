@@ -41,12 +41,19 @@
 			{% for table in pairings %}
 			<tr {% if not table.good_match %}style="background-color:red"{% endif %}>
 				<td>{{ table.number }}</td>
-				<td><div>{{ table.player_a.name }}</div><div>{{ table.player_a.match_points }}</div></td>
+				<td><div>{{ table.player_a.name }}</div><div>{{ table.player_a.result_display }}</div></td>
 				<td><input type="checkbox" class="choices" id="{{ table.id }}a" /></td>
-				<td><div>{{ table.player_b.name }}</div><div>{{ table.player_b.match_points }}</div></td>
+				<td><div>{{ table.player_b.name }}</div><div>{{ table.player_b.result_display }}</div></td>
 				<td><input type="checkbox" class="choices" id="{{ table.id }}b" /></td>
 			</tr>
 			{% endfor %}
+			{% if round.bye is not None %}
+			<tr>
+				<td>BYE</td>
+				<td><div>{{ round.bye.name }}</div><div>{{ round.bye.result_display }}</div></td>
+				<td><input type="checkbox" class="choices" id="BYE"/></td>
+			</tr>
+			{% endif %}
 		</table>
 		<div style="margin-top:10px"><input type="button" onclick="doSubmit()" value="Submit" /></div>
 		<div style="margin-top:10px"><a href="{% url 'tournament:detail' round.tournament.id %}">Back to Event</a></div>
