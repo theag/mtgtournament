@@ -22,6 +22,7 @@ class Player(models.Model):
     match_draws = models.SmallIntegerField(default=0)
     match_losses = models.SmallIntegerField(default=0)
     dropped = models.BooleanField(default=False)
+    #next is adding penalties
 
     def result_display(self):
         return f"{self.match_wins}-{self.match_draws}-{self.match_losses}"
